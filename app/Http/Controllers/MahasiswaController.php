@@ -2,98 +2,68 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Mahasiswa;
+use App\Models\Prodi;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class MahasiswaController extends Controller
 {
     public function index()
     {
-        // Ambil data dari session, kalau belum ada, isi data awal
-        $mahasiswa = session('mahasiswa', [
-            1 => ['id'=>1, 'nim'=>'2305505001', 'nama'=>'Putu Agus', 'prodi'=>'Teknologi Informasi'],
-            2 => ['id'=>2, 'nim'=>'2305405002', 'nama'=>'Made Cenik', 'prodi'=>'Teknik Elektro'],
-            3 => ['id'=>3, 'nim'=>'2305405003', 'nama'=>'Kadek Sari', 'prodi'=>'Sistem Informasi']
-        ]);
+        // Ambil semua data mahasiswa dari database
+        $mahasiswa = Mahasiswa::all();
 
-        session(['mahasiswa' => $mahasiswa]);
+        // Kirim data ke view
         return view('mahasiswa.index', compact('mahasiswa'));
-    }
-
-    public function destroy($id)
-    {
-        $mahasiswa = session('mahasiswa', []);
-
-        if (!isset($mahasiswa[$id])) {
-            return redirect('/mahasiswa')->with('error', 'Mahasiswa tidak ditemukan.');
-        }
-
-        unset($mahasiswa[$id]); // hapus data sesuai ID
-        session(['mahasiswa' => $mahasiswa]); // simpan lagi ke session
-
-        return redirect('/mahasiswa')->with('success', 'Mahasiswa berhasil dihapus.');
     }
 
     public function create()
     {
-        return view('mahasiswa.create');
+        $prodi = Prodi::with('fakultas')->get();
+        return view('mahasiswa.create', compact('prodi'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'nim' => 'required|min:4',
-            'nama' => 'required',
-            'prodi' => 'required'
+        $validated = $request->validate([
+            'nim' => ['required', 'numeric', 'unique:mahasiswas,nim'],
+            'nama' => ['required', 'string', 'max:255'],
+            'prodi_id' => ['required', 'exists:prodis,id'],
+        ], [
+            'nim.required' => 'NIM wajib diisi.',
+            'nim.unique' => 'NIM sudah terdaftar.',
+            'nama.required' => 'Nama wajib diisi.',
+            'prodi_id.required' => 'Prodi wajib dipilih.',
         ]);
 
-        $mahasiswa = session('mahasiswa', []);
-        $id = count($mahasiswa) + 1;
-        $mahasiswa[$id] = [
-            'id' => $id,
-            'nim' => $request->nim,
-            'nama' => $request->nama,
-            'prodi' => $request->prodi,
-        ];
+        Mahasiswa::create($validated);
 
-        session(['mahasiswa' => $mahasiswa]);
-
-        return redirect('/mahasiswa')->with('success', 'Mahasiswa baru berhasil ditambahkan.');
+        return redirect()->route('mahasiswa.index')->with('success', 'Mahasiswa berhasil ditambahkan.');
     }
 
-    public function edit($id)
+    public function edit(Mahasiswa $mahasiswa)
     {
-        $mahasiswa = session('mahasiswa', []);
-        $m = $mahasiswa[$id] ?? null;
-
-        if (!$m) {
-            return redirect('/mahasiswa')->with('error', 'Mahasiswa tidak ditemukan.');
-        }
-
-        return view('mahasiswa.edit', compact('m'));
+        $prodi = Prodi::with('fakultas')->get();
+        return view('mahasiswa.edit', compact('mahasiswa', 'prodi'));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, Mahasiswa $mahasiswa)
     {
-        $request->validate([
-            'nim' => 'required|min:4',
-            'nama' => 'required',
-            'prodi' => 'required'
+        $validated = $request->validate([
+            'nim' => ['required', 'numeric', Rule::unique('mahasiswas', 'nim')->ignore($mahasiswa->id)],
+            'nama' => ['required', 'string', 'max:255'],
+            'prodi_id' => ['required', 'exists:prodis,id'],
         ]);
 
-        $mahasiswa = session('mahasiswa', []);
-        if (!isset($mahasiswa[$id])) {
-            return redirect('/mahasiswa')->with('error', 'Mahasiswa tidak ditemukan.');
-        }
+        $mahasiswa->update($validated);
 
-        $mahasiswa[$id] = [
-            'id' => $id,
-            'nim' => $request->nim,
-            'nama' => $request->nama,
-            'prodi' => $request->prodi
-        ];
+        return redirect()->route('mahasiswa.index')->with('success', 'Mahasiswa berhasil diperbarui.');
+    }
 
-        session(['mahasiswa' => $mahasiswa]);
-
-        return redirect('/mahasiswa')->with('success', 'Data mahasiswa berhasil diperbarui.');
+    public function destroy(Mahasiswa $mahasiswa)
+    {
+        $mahasiswa->delete();
+        return redirect()->route('mahasiswa.index')->with('success', 'Mahasiswa berhasil dihapus.');
     }
 }
